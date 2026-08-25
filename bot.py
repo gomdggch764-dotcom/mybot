@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 import json
@@ -14,7 +15,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 logging.basicConfig(level=logging.INFO)
 
 # ============ КОНФИГ ============
-BOT_TOKEN = "8878696401:AAFmIgsiHE_ZcP3Z-AziB-P0w_63gIgnXUY"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8931378017:AAFUr0_NdN8hcaZ1djEG1VH1qizjp5QPdIM")
 
 # 🔽 ТРИ КАНАЛА ДЛЯ ПОДПИСКИ 🔽
 REQUIRED_CHANNELS = [
