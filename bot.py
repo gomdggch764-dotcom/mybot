@@ -3,6 +3,8 @@ import asyncio
 import logging
 import json
 import time
+import base64
+import requests
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
@@ -36,7 +38,12 @@ REQUIRED_CHANNELS = [
 ]
 
 ADMIN_IDS = [6621617827, 7326365411]
-# ================================
+
+# ============ GITHUB НАСТРОЙКИ ============
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "")
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
+# =========================================
 
 storage = MemoryStorage()
 bot = Bot(token=BOT_TOKEN)
@@ -54,33 +61,127 @@ bot_stats = {
     "errors": 0
 }
 
-# Переменные для пагинации
 users_page = {}
 
-# Загрузка/сохранение команд
+# ============ ФУНКЦИИ РАБОТЫ С GITHUB ============
+def save_to_github(file_path, content):
+    """Сохраняет файл в репозиторий GitHub"""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        print("⚠️ GitHub не настроен, файл сохранен только локально")
+        return False
+    
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        # Проверяем существует ли файл
+        response = requests.get(url, headers=headers)
+        sha = None
+        if response.status_code == 200:
+            sha = response.json().get("sha")
+        
+        # Кодируем содержимое в base64
+        content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+        
+        data = {
+            "message": f"Авто-обновление {file_path}",
+            "content": content_base64,
+            "branch": GITHUB_BRANCH
+        }
+        if sha:
+            data["sha"] = sha
+        
+        # Отправляем в GitHub
+        response = requests.put(url, headers=headers, json=data)
+        
+        if response.status_code in [200, 201]:
+            print(f"✅ {file_path} сохранен в GitHub")
+            return True
+        else:
+            print(f"❌ Ошибка GitHub: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+        return False
+
+def load_from_github(file_path):
+    """Загружает файл из GitHub"""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return None
+    
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            content = base64.b64decode(data["content"]).decode('utf-8')
+            return json.loads(content)
+        return None
+    except Exception as e:
+        print(f"❌ Ошибка загрузки: {e}")
+        return None
+
+# ============ ЗАГРУЗКА/СОХРАНЕНИЕ ДАННЫХ ============
 def load_commands():
+    """Загружает команды сначала из GitHub, потом локально"""
+    github_data = load_from_github(COMMANDS_FILE)
+    if github_data is not None:
+        print(f"✅ Загружено из GitHub: {len(github_data)} команд")
+        with open(COMMANDS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(github_data, f, ensure_ascii=False, indent=2)
+        return github_data
+    
     if os.path.exists(COMMANDS_FILE):
         with open(COMMANDS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            print(f"✅ Загружено локально: {len(data)} команд")
+            return data
     return {}
 
 def save_commands(commands):
+    """Сохраняет команды локально и в GitHub"""
     with open(COMMANDS_FILE, 'w', encoding='utf-8') as f:
         json.dump(commands, f, ensure_ascii=False, indent=2)
+    print(f"✅ Локально сохранено: {len(commands)} команд")
+    
+    content = json.dumps(commands, ensure_ascii=False, indent=2)
+    save_to_github(COMMANDS_FILE, content)
 
-hidden_commands = load_commands()
-
-# Загрузка/сохранение статистики пользователей
 def load_users_stats():
+    """Загружает статистику сначала из GitHub, потом локально"""
+    github_data = load_from_github(USERS_FILE)
+    if github_data is not None:
+        print(f"✅ Загружено из GitHub: {len(github_data)} пользователей")
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(github_data, f, ensure_ascii=False, indent=2)
+        return github_data
+    
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            print(f"✅ Загружено локально: {len(data)} пользователей")
+            return data
     return {}
 
 def save_users_stats(stats):
+    """Сохраняет статистику локально и в GitHub"""
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
+    print(f"✅ Локально сохранено: {len(stats)} пользователей")
+    
+    content = json.dumps(stats, ensure_ascii=False, indent=2)
+    save_to_github(USERS_FILE, content)
 
+# Загружаем данные
+hidden_commands = load_commands()
 users_stats = load_users_stats()
 
 # --- Состояния FSM ---
@@ -168,7 +269,7 @@ def get_user_stats(user_id: int) -> dict:
         "username": user.get("username"),
         "first_seen": first_seen.strftime('%d.%m.%Y %H:%M'),
         "last_seen": last_seen.strftime('%d.%m.%Y %H:%M'),
-        "first_seen_timestamp": user["first_seen"],  # Для сортировки
+        "first_seen_timestamp": user["first_seen"],
         "total_seconds": total_seconds,
         "days": days,
         "hours": hours,
@@ -193,7 +294,6 @@ def get_all_users_stats() -> list:
                 result.append(stats)
         except:
             continue
-    # Сортируем от новых к старым (по убыванию first_seen_timestamp)
     result.sort(key=lambda x: x['first_seen_timestamp'], reverse=True)
     return result
 
@@ -334,27 +434,24 @@ async def cmd_start(message: types.Message):
             reply_markup=keyboard
         )
     else:
-        # 🆕 ОБНОВЛЕННОЕ ПРИВЕТСТВИЕ ДЛЯ ОБЫЧНЫХ ПОЛЬЗОВАТЕЛЕЙ С АКТИВНОЙ ССЫЛКОЙ
-        channels_text = "\n".join([f"• {ch['name']}" for ch in REQUIRED_CHANNELS])
+        channels_text = ""
+        for ch in REQUIRED_CHANNELS:
+            channels_text += f"• [{ch['name']}]({ch['link']})\n"
         
         welcome_text = (
             "🎮 **БОТ АКТИВИРОВАН**\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
             "✅ Вы успешно подписались на все каналы!\n\n"
             "📢 **Активация скриптов происходит через:**\n"
-            f"{channels_text}\n\n"
+            f"{channels_text}\n"
             "⚡ **Бот работает 24/7 без задержки**\n\n"
             "━━━━━━━━━━━━━━━━━━\n"
-            "🔮 **Используйте команды для доступа к скриптам**\n"
-            "🔄 Скрипты обновляются регулярно\n\n"
             "────────────────────\n"
             "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
             "━━━━━━━━━━━━━━━━━━"
         )
         
-        # Отправляем с картинкой
         try:
-            # Пробуем отправить с картинкой (если есть файл welcome.jpg)
             photo = FSInputFile("welcome.jpg") if os.path.exists("welcome.jpg") else None
             if photo:
                 await message.answer_photo(
@@ -363,7 +460,6 @@ async def cmd_start(message: types.Message):
                     parse_mode="Markdown"
                 )
             else:
-                # Если картинки нет - отправляем просто текст с эмодзи
                 await message.answer(welcome_text, parse_mode="Markdown")
         except Exception as e:
             await message.answer(welcome_text, parse_mode="Markdown")
@@ -390,11 +486,9 @@ async def cmd_info(message: types.Message):
     query = args[1]
     target_user_id = None
     
-    # Проверяем, что это ID (число)
     if query.isdigit():
         target_user_id = int(query)
     else:
-        # Это username, ищем в базе
         username = query.replace('@', '').lower()
         for user_id_str, data in users_stats.items():
             if data.get('username', '').lower() == username:
@@ -489,7 +583,6 @@ async def all_users_stats(callback: types.CallbackQuery):
         await callback.answer("⛔ Доступ запрещен!", show_alert=True)
         return
     
-    # Сбрасываем страницу при первом открытии
     users_page[callback.from_user.id] = 0
     await show_users_page(callback.message, callback.from_user.id, 0)
     await callback.answer()
@@ -523,11 +616,9 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
         )
         return
     
-    # Настройки пагинации
     per_page = 5
     total_pages = (len(all_stats) + per_page - 1) // per_page
     
-    # Проверяем валидность страницы
     if page < 0:
         page = 0
     if page >= total_pages:
@@ -537,7 +628,6 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
     end_idx = min(start_idx + per_page, len(all_stats))
     page_stats = all_stats[start_idx:end_idx]
     
-    # Формируем текст
     text = f"📊 **Статистика всех пользователей**\n"
     text += f"👥 Всего: {len(all_stats)} | 📄 Страница {page + 1}/{total_pages}\n"
     text += "━━━━━━━━━━━━━━━━━━\n\n"
@@ -557,7 +647,6 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
         text += f"   👁 Визитов: {stats['total_visits']} | ⏱ {time_str}\n"
         text += f"   📅 Первый визит: {stats['first_seen']}\n\n"
     
-    # Кнопки пагинации
     keyboard_buttons = []
     
     nav_row = []
@@ -1126,18 +1215,18 @@ async def check_subscription_callback(callback: types.CallbackQuery):
                     raise
         else:
             try:
-                # Обновленное сообщение для обычных пользователей с активной ссылкой
-                channels_text = "\n".join([f"• {ch['name']}" for ch in REQUIRED_CHANNELS])
+                channels_text = ""
+                for ch in REQUIRED_CHANNELS:
+                    channels_text += f"• [{ch['name']}]({ch['link']})\n"
+                
                 welcome_text = (
                     "🎮 **БОТ АКТИВИРОВАН**\n"
                     "━━━━━━━━━━━━━━━━━━\n\n"
                     "✅ Вы успешно подписались на все каналы!\n\n"
                     "📢 **Активация скриптов происходит через:**\n"
-                    f"{channels_text}\n\n"
+                    f"{channels_text}\n"
                     "⚡ **Бот работает 24/7 без задержки**\n\n"
                     "━━━━━━━━━━━━━━━━━━\n"
-                    "🔮 **Используйте команды для доступа к скриптам**\n"
-                    "🔄 Скрипты обновляются регулярно\n\n"
                     "────────────────────\n"
                     "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
                     "━━━━━━━━━━━━━━━━━━"
@@ -1174,6 +1263,7 @@ async def main():
     for channel in REQUIRED_CHANNELS:
         print(f"   - {channel['name']}: {channel['link']}")
     print(f"⚡ Мониторинг скорости активен!")
+    print(f"🔗 GitHub синхронизация: {'✅ Включена' if GITHUB_TOKEN else '❌ Отключена'}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
