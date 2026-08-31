@@ -1054,13 +1054,22 @@ async def skip_media(callback: types.CallbackQuery, state: FSMContext):
     await show_confirm_mailing(callback.message, state)
     await callback.answer()
 
+# --- ИСПРАВЛЕННЫЕ ОБРАБОТЧИКИ МЕДИА (сохраняют caption как текст) ---
+
 @dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.photo)
 async def get_mailing_photo(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     
+    # Если есть подпись, сохраняем её как текст
+    caption = message.caption or ""
+    if caption:
+        await state.update_data(mailing_text=caption)
+        print(f"📝 Текст из подписи: {caption[:50]}")
+    
     photo = message.photo[-1]
     await state.update_data(media_type='photo', media_file_id=photo.file_id)
+    print(f"✅ Сохранено фото: {photo.file_id}")
     await show_confirm_mailing(message, state)
 
 @dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.video)
@@ -1068,8 +1077,14 @@ async def get_mailing_video(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     
+    caption = message.caption or ""
+    if caption:
+        await state.update_data(mailing_text=caption)
+        print(f"📝 Текст из подписи: {caption[:50]}")
+    
     video = message.video
     await state.update_data(media_type='video', media_file_id=video.file_id)
+    print(f"✅ Сохранено видео: {video.file_id}")
     await show_confirm_mailing(message, state)
 
 @dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.animation)
@@ -1077,8 +1092,14 @@ async def get_mailing_gif(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     
+    caption = message.caption or ""
+    if caption:
+        await state.update_data(mailing_text=caption)
+        print(f"📝 Текст из подписи: {caption[:50]}")
+    
     animation = message.animation
     await state.update_data(media_type='animation', media_file_id=animation.file_id)
+    print(f"✅ Сохранена анимация: {animation.file_id}")
     await show_confirm_mailing(message, state)
 
 @dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.document)
@@ -1086,9 +1107,17 @@ async def get_mailing_document(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     
+    caption = message.caption or ""
+    if caption:
+        await state.update_data(mailing_text=caption)
+        print(f"📝 Текст из подписи: {caption[:50]}")
+    
     document = message.document
     await state.update_data(media_type='document', media_file_id=document.file_id)
+    print(f"✅ Сохранён документ: {document.file_id}")
     await show_confirm_mailing(message, state)
+
+# -------------------------------------------------------
 
 async def show_confirm_mailing(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -1137,11 +1166,22 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
     media_type = data.get('media_type')
     media_file_id = data.get('media_file_id')
     
-    await callback.message.edit_text(
-        "⏳ **Отправка рассылки...**\n"
-        f"👥 Получателей: {len(users_stats)}",
-        parse_mode="Markdown"
-    )
+    # Логируем данные для отладки
+    print(f"📨 Отправка рассылки: текст='{text[:50]}', тип={media_type}, file_id={media_file_id}")
+    
+    # Пытаемся отредактировать сообщение, если не получается – отвечаем новым
+    try:
+        await callback.message.edit_text(
+            "⏳ **Отправка рассылки...**\n"
+            f"👥 Получателей: {len(users_stats)}",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await callback.message.answer(
+            "⏳ **Отправка рассылки...**\n"
+            f"👥 Получателей: {len(users_stats)}",
+            parse_mode="Markdown"
+        )
     
     success = 0
     failed = 0
@@ -1150,19 +1190,45 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
         try:
             user_id = int(user_id_str)
             
-            if media_type == 'photo':
-                await bot.send_photo(chat_id=user_id, photo=media_file_id, caption=text, parse_mode="HTML")
-            elif media_type == 'video':
-                await bot.send_video(chat_id=user_id, video=media_file_id, caption=text, parse_mode="HTML")
-            elif media_type == 'animation':
-                await bot.send_animation(chat_id=user_id, animation=media_file_id, caption=text, parse_mode="HTML")
-            elif media_type == 'document':
-                await bot.send_document(chat_id=user_id, document=media_file_id, caption=text, parse_mode="HTML")
+            # Отправляем медиа, если есть, иначе только текст
+            if media_type and media_file_id:
+                if media_type == 'photo':
+                    await bot.send_photo(
+                        chat_id=user_id,
+                        photo=media_file_id,
+                        caption=text if text else None,
+                        parse_mode="HTML"
+                    )
+                elif media_type == 'video':
+                    await bot.send_video(
+                        chat_id=user_id,
+                        video=media_file_id,
+                        caption=text if text else None,
+                        parse_mode="HTML"
+                    )
+                elif media_type == 'animation':
+                    await bot.send_animation(
+                        chat_id=user_id,
+                        animation=media_file_id,
+                        caption=text if text else None,
+                        parse_mode="HTML"
+                    )
+                elif media_type == 'document':
+                    await bot.send_document(
+                        chat_id=user_id,
+                        document=media_file_id,
+                        caption=text if text else None,
+                        parse_mode="HTML"
+                    )
+                else:
+                    # На случай неизвестного типа – просто текст
+                    await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
             else:
+                # Только текст
                 await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
             
             success += 1
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.05)  # небольшая задержка
             
         except Exception as e:
             failed += 1
@@ -1181,7 +1247,11 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
     ])
     
-    await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode="Markdown")
+    try:
+        await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode="Markdown")
+    except Exception as e:
+        await callback.message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
+    
     await state.clear()
     await callback.answer()
 
