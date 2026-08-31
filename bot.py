@@ -2,12 +2,11 @@ import os
 import asyncio
 import logging
 import json
-import os
 import time
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -54,6 +53,9 @@ bot_stats = {
     "commands_used": 0,
     "errors": 0
 }
+
+# Переменные для пагинации
+users_page = {}
 
 # Загрузка/сохранение команд
 def load_commands():
@@ -166,6 +168,7 @@ def get_user_stats(user_id: int) -> dict:
         "username": user.get("username"),
         "first_seen": first_seen.strftime('%d.%m.%Y %H:%M'),
         "last_seen": last_seen.strftime('%d.%m.%Y %H:%M'),
+        "first_seen_timestamp": user["first_seen"],  # Для сортировки
         "total_seconds": total_seconds,
         "days": days,
         "hours": hours,
@@ -180,7 +183,7 @@ def get_user_stats(user_id: int) -> dict:
     }
 
 def get_all_users_stats() -> list:
-    """Получает статистику всех пользователей"""
+    """Получает статистику всех пользователей, сортировка от новых к старым"""
     result = []
     for user_id_str, data in users_stats.items():
         try:
@@ -190,8 +193,8 @@ def get_all_users_stats() -> list:
                 result.append(stats)
         except:
             continue
-    # Сортируем по количеству визитов (по убыванию)
-    result.sort(key=lambda x: x['total_visits'], reverse=True)
+    # Сортируем от новых к старым (по убыванию first_seen_timestamp)
+    result.sort(key=lambda x: x['first_seen_timestamp'], reverse=True)
     return result
 
 # ==================== ПРОВЕРКА ПОДПИСКИ ====================
@@ -331,7 +334,39 @@ async def cmd_start(message: types.Message):
             reply_markup=keyboard
         )
     else:
-        await message.answer("✅ Добро пожаловать! Вы подписаны на все каналы.")
+        # 🆕 ОБНОВЛЕННОЕ ПРИВЕТСТВИЕ ДЛЯ ОБЫЧНЫХ ПОЛЬЗОВАТЕЛЕЙ С АКТИВНОЙ ССЫЛКОЙ
+        channels_text = "\n".join([f"• {ch['name']}" for ch in REQUIRED_CHANNELS])
+        
+        welcome_text = (
+            "🎮 **БОТ АКТИВИРОВАН**\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "✅ Вы успешно подписались на все каналы!\n\n"
+            "📢 **Активация скриптов происходит через:**\n"
+            f"{channels_text}\n\n"
+            "⚡ **Бот работает 24/7 без задержки**\n\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "🔮 **Используйте команды для доступа к скриптам**\n"
+            "🔄 Скрипты обновляются регулярно\n\n"
+            "────────────────────\n"
+            "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
+            "━━━━━━━━━━━━━━━━━━"
+        )
+        
+        # Отправляем с картинкой
+        try:
+            # Пробуем отправить с картинкой (если есть файл welcome.jpg)
+            photo = FSInputFile("welcome.jpg") if os.path.exists("welcome.jpg") else None
+            if photo:
+                await message.answer_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    parse_mode="Markdown"
+                )
+            else:
+                # Если картинки нет - отправляем просто текст с эмодзи
+                await message.answer(welcome_text, parse_mode="Markdown")
+        except Exception as e:
+            await message.answer(welcome_text, parse_mode="Markdown")
 
 # --- КОМАНДА /info ---
 @dp.message(Command("info"))
@@ -447,17 +482,38 @@ async def admin_panel(callback: types.CallbackQuery):
             raise
     await callback.answer()
 
-# --- СТАТИСТИКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ---
+# --- СТАТИСТИКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ С ПАГИНАЦИЕЙ ---
 @dp.callback_query(F.data == "all_users_stats")
 async def all_users_stats(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ Доступ запрещен!", show_alert=True)
         return
     
+    # Сбрасываем страницу при первом открытии
+    users_page[callback.from_user.id] = 0
+    await show_users_page(callback.message, callback.from_user.id, 0)
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("users_page_"))
+async def users_page_callback(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    try:
+        page = int(callback.data.split("_")[2])
+        users_page[callback.from_user.id] = page
+        await show_users_page(callback.message, callback.from_user.id, page)
+    except Exception as e:
+        await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
+    await callback.answer()
+
+async def show_users_page(message: types.Message, user_id: int, page: int):
+    """Отображает страницу со статистикой пользователей"""
     all_stats = get_all_users_stats()
     
     if not all_stats:
-        await callback.message.edit_text(
+        await message.edit_text(
             "📭 **Нет пользователей**\n\n"
             "Пока никто не использовал бота.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -465,15 +521,29 @@ async def all_users_stats(callback: types.CallbackQuery):
             ]),
             parse_mode="Markdown"
         )
-        await callback.answer()
         return
     
-    # Формируем список (топ-20)
-    text = "📊 **Статистика всех пользователей**\n"
-    text += f"👥 Всего: {len(all_stats)}\n━━━━━━━━━━━━━━━━━━\n\n"
+    # Настройки пагинации
+    per_page = 5
+    total_pages = (len(all_stats) + per_page - 1) // per_page
     
-    for i, stats in enumerate(all_stats[:20], 1):
-        username_display = f"@{stats['username']}" if stats['username'] else "нет"
+    # Проверяем валидность страницы
+    if page < 0:
+        page = 0
+    if page >= total_pages:
+        page = total_pages - 1
+    
+    start_idx = page * per_page
+    end_idx = min(start_idx + per_page, len(all_stats))
+    page_stats = all_stats[start_idx:end_idx]
+    
+    # Формируем текст
+    text = f"📊 **Статистика всех пользователей**\n"
+    text += f"👥 Всего: {len(all_stats)} | 📄 Страница {page + 1}/{total_pages}\n"
+    text += "━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for i, stats in enumerate(page_stats, start_idx + 1):
+        username_display = f"@{stats['username']}" if stats['username'] else "❌ нет"
         time_str = ""
         if stats['days'] > 0:
             time_str += f"{stats['days']}д "
@@ -485,18 +555,27 @@ async def all_users_stats(callback: types.CallbackQuery):
         text += f"   🆔 `{stats['user_id']}`\n"
         text += f"   🔗 {username_display}\n"
         text += f"   👁 Визитов: {stats['total_visits']} | ⏱ {time_str}\n"
-        text += f"   📅 Посл. визит: {stats['last_seen']}\n\n"
+        text += f"   📅 Первый визит: {stats['first_seen']}\n\n"
     
-    if len(all_stats) > 20:
-        text += f"... и ещё {len(all_stats) - 20} пользователей"
+    # Кнопки пагинации
+    keyboard_buttons = []
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 Обновить", callback_data="all_users_stats")],
-        [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
-    ])
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"users_page_{page - 1}"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"users_page_{page + 1}"))
+    
+    if nav_row:
+        keyboard_buttons.append(nav_row)
+    
+    keyboard_buttons.append([InlineKeyboardButton(text="🔄 Обновить", callback_data=f"users_page_{page}")])
+    keyboard_buttons.append([InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     try:
-        await callback.message.edit_text(
+        await message.edit_text(
             text,
             reply_markup=keyboard,
             parse_mode="Markdown"
@@ -504,7 +583,6 @@ async def all_users_stats(callback: types.CallbackQuery):
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
-    await callback.answer()
 
 # --- СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ ---
 @dp.callback_query(F.data == "my_stats")
@@ -1048,7 +1126,23 @@ async def check_subscription_callback(callback: types.CallbackQuery):
                     raise
         else:
             try:
-                await callback.message.edit_text("✅ Подписка на все каналы подтверждена! Добро пожаловать!")
+                # Обновленное сообщение для обычных пользователей с активной ссылкой
+                channels_text = "\n".join([f"• {ch['name']}" for ch in REQUIRED_CHANNELS])
+                welcome_text = (
+                    "🎮 **БОТ АКТИВИРОВАН**\n"
+                    "━━━━━━━━━━━━━━━━━━\n\n"
+                    "✅ Вы успешно подписались на все каналы!\n\n"
+                    "📢 **Активация скриптов происходит через:**\n"
+                    f"{channels_text}\n\n"
+                    "⚡ **Бот работает 24/7 без задержки**\n\n"
+                    "━━━━━━━━━━━━━━━━━━\n"
+                    "🔮 **Используйте команды для доступа к скриптам**\n"
+                    "🔄 Скрипты обновляются регулярно\n\n"
+                    "────────────────────\n"
+                    "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
+                    "━━━━━━━━━━━━━━━━━━"
+                )
+                await callback.message.edit_text(welcome_text, parse_mode="Markdown")
             except Exception as e:
                 if "message is not modified" not in str(e):
                     raise
