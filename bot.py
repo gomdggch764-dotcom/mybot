@@ -77,13 +77,11 @@ def save_to_github(file_path, content):
             "Accept": "application/vnd.github.v3+json"
         }
         
-        # Проверяем существует ли файл
         response = requests.get(url, headers=headers)
         sha = None
         if response.status_code == 200:
             sha = response.json().get("sha")
         
-        # Кодируем содержимое в base64
         content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
         
         data = {
@@ -94,7 +92,6 @@ def save_to_github(file_path, content):
         if sha:
             data["sha"] = sha
         
-        # Отправляем в GitHub
         response = requests.put(url, headers=headers, json=data)
         
         if response.status_code in [200, 201]:
@@ -131,7 +128,6 @@ def load_from_github(file_path):
 
 # ============ ЗАГРУЗКА/СОХРАНЕНИЕ ДАННЫХ ============
 def load_commands():
-    """Загружает команды сначала из GitHub, потом локально"""
     github_data = load_from_github(COMMANDS_FILE)
     if github_data is not None:
         print(f"✅ Загружено из GitHub: {len(github_data)} команд")
@@ -147,7 +143,6 @@ def load_commands():
     return {}
 
 def save_commands(commands):
-    """Сохраняет команды локально и в GitHub"""
     with open(COMMANDS_FILE, 'w', encoding='utf-8') as f:
         json.dump(commands, f, ensure_ascii=False, indent=2)
     print(f"✅ Локально сохранено: {len(commands)} команд")
@@ -156,7 +151,6 @@ def save_commands(commands):
     save_to_github(COMMANDS_FILE, content)
 
 def load_users_stats():
-    """Загружает статистику сначала из GitHub, потом локально"""
     github_data = load_from_github(USERS_FILE)
     if github_data is not None:
         print(f"✅ Загружено из GitHub: {len(github_data)} пользователей")
@@ -172,7 +166,6 @@ def load_users_stats():
     return {}
 
 def save_users_stats(stats):
-    """Сохраняет статистику локально и в GitHub"""
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
     print(f"✅ Локально сохранено: {len(stats)} пользователей")
@@ -190,10 +183,15 @@ class AddCommandStates(StatesGroup):
     waiting_for_text = State()
     waiting_for_media = State()
 
+# --- Состояния для рассылки ---
+class MailingStates(StatesGroup):
+    waiting_for_mailing_text = State()
+    waiting_for_mailing_media = State()
+    waiting_for_mailing_confirm = State()
+
 # ==================== РАБОТА СО СТАТИСТИКОЙ ====================
 
 def update_user_stats(user_id: int, username: str = None, first_name: str = None):
-    """Обновляет статистику пользователя"""
     now = time.time()
     today = datetime.now().strftime('%Y-%m-%d')
     user_id_str = str(user_id)
@@ -225,7 +223,6 @@ def update_user_stats(user_id: int, username: str = None, first_name: str = None
     save_users_stats(users_stats)
 
 def get_user_stats(user_id: int) -> dict:
-    """Получает статистику пользователя"""
     user_id_str = str(user_id)
     if user_id_str not in users_stats:
         return None
@@ -284,7 +281,6 @@ def get_user_stats(user_id: int) -> dict:
     }
 
 def get_all_users_stats() -> list:
-    """Получает статистику всех пользователей, сортировка от новых к старым"""
     result = []
     for user_id_str, data in users_stats.items():
         try:
@@ -467,7 +463,6 @@ async def cmd_start(message: types.Message):
 # --- КОМАНДА /info ---
 @dp.message(Command("info"))
 async def cmd_info(message: types.Message):
-    """Показывает статистику пользователя по ID или username"""
     if not is_admin(message.from_user.id):
         await message.answer("⛔ У вас нет доступа к этой команде!")
         return
@@ -555,6 +550,7 @@ async def admin_panel(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="➕ Добавить команду", callback_data="add_command")],
         [InlineKeyboardButton(text="📋 Список команд", callback_data="list_commands")],
         [InlineKeyboardButton(text="❌ Удалить команду", callback_data="delete_command")],
+        [InlineKeyboardButton(text="📨 Сделать рассылку", callback_data="start_mailing")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_start")]
     ])
     
@@ -567,7 +563,8 @@ async def admin_panel(callback: types.CallbackQuery):
             "📊 **Статистика всех пользователей** - список всех юзеров\n"
             "👤 **Моя статистика** - ваша активность в боте\n"
             "⚡ **Проверить скорость** - задержка бота\n"
-            "➕ **Добавить команду** - создайте скрытую команду",
+            "➕ **Добавить команду** - создайте скрытую команду\n"
+            "📨 **Сделать рассылку** - отправьте сообщение всем пользователям",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
@@ -602,7 +599,6 @@ async def users_page_callback(callback: types.CallbackQuery):
     await callback.answer()
 
 async def show_users_page(message: types.Message, user_id: int, page: int):
-    """Отображает страницу со статистикой пользователей"""
     all_stats = get_all_users_stats()
     
     if not all_stats:
@@ -1002,6 +998,208 @@ async def show_command_created(message: types.Message, command_name: str, text: 
         await message.answer_voice(voice=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
     else:
         await message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
+
+# ==================== РАССЫЛКА ====================
+
+@dp.callback_query(F.data == "start_mailing")
+async def start_mailing(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        "📨 **СОЗДАНИЕ РАССЫЛКИ**\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "Отправьте **текст** сообщения для рассылки.\n\n"
+        "📝 Можно использовать HTML-разметку:\n"
+        "• `<b>жирный</b>`\n"
+        "• `<i>курсив</i>`\n"
+        "• `<a href='url'>ссылка</a>`\n\n"
+        "❌ Для отмены отправьте /cancel",
+        parse_mode="Markdown"
+    )
+    await state.set_state(MailingStates.waiting_for_mailing_text)
+    await callback.answer()
+
+@dp.message(StateFilter(MailingStates.waiting_for_mailing_text))
+async def get_mailing_text(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    text = message.text
+    if not text:
+        await message.answer("❌ Отправьте текст!")
+        return
+    
+    await state.update_data(mailing_text=text)
+    await state.set_state(MailingStates.waiting_for_mailing_media)
+    
+    await message.answer(
+        "✅ **Текст сохранен!**\n\n"
+        "📎 Теперь отправьте **медиа** (фото, видео, GIF) или нажмите **Пропустить** если хотите отправить только текст.\n\n"
+        "➡️ Нажмите кнопку ниже чтобы пропустить медиа:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⏭️ Пропустить медиа", callback_data="skip_media")]
+        ]),
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(F.data == "skip_media")
+async def skip_media(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    await state.update_data(media_type=None, media_file_id=None)
+    await show_confirm_mailing(callback.message, state)
+    await callback.answer()
+
+@dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.photo)
+async def get_mailing_photo(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    photo = message.photo[-1]
+    await state.update_data(media_type='photo', media_file_id=photo.file_id)
+    await show_confirm_mailing(message, state)
+
+@dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.video)
+async def get_mailing_video(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    video = message.video
+    await state.update_data(media_type='video', media_file_id=video.file_id)
+    await show_confirm_mailing(message, state)
+
+@dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.animation)
+async def get_mailing_gif(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    animation = message.animation
+    await state.update_data(media_type='animation', media_file_id=animation.file_id)
+    await show_confirm_mailing(message, state)
+
+@dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.document)
+async def get_mailing_document(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    document = message.document
+    await state.update_data(media_type='document', media_file_id=document.file_id)
+    await show_confirm_mailing(message, state)
+
+async def show_confirm_mailing(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    text = data.get('mailing_text', '')
+    media_type = data.get('media_type')
+    media_file_id = data.get('media_file_id')
+    
+    total_users = len(users_stats)
+    
+    confirm_text = (
+        f"📨 **ПОДТВЕРЖДЕНИЕ РАССЫЛКИ**\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 **Получателей:** {total_users} пользователей\n"
+        f"📝 **Текст:**\n{text[:200]}{'...' if len(text) > 200 else ''}\n\n"
+        f"📎 **Медиа:** {'✅ есть' if media_type else '❌ нет'}\n\n"
+        f"⚠️ Рассылка будет отправлена **ВСЕМ** пользователям!\n"
+        f"Отменить будет невозможно!"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Отправить рассылку", callback_data="confirm_mailing")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_mailing")]
+    ])
+    
+    if media_type == 'photo':
+        await message.answer_photo(photo=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+    elif media_type == 'video':
+        await message.answer_video(video=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+    elif media_type == 'animation':
+        await message.answer_animation(animation=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+    elif media_type == 'document':
+        await message.answer_document(document=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+    else:
+        await message.answer(confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+    
+    await state.set_state(MailingStates.waiting_for_mailing_confirm)
+
+@dp.callback_query(F.data == "confirm_mailing")
+async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    data = await state.get_data()
+    text = data.get('mailing_text', '')
+    media_type = data.get('media_type')
+    media_file_id = data.get('media_file_id')
+    
+    await callback.message.edit_text(
+        "⏳ **Отправка рассылки...**\n"
+        f"👥 Получателей: {len(users_stats)}",
+        parse_mode="Markdown"
+    )
+    
+    success = 0
+    failed = 0
+    
+    for user_id_str in users_stats.keys():
+        try:
+            user_id = int(user_id_str)
+            
+            if media_type == 'photo':
+                await bot.send_photo(chat_id=user_id, photo=media_file_id, caption=text, parse_mode="HTML")
+            elif media_type == 'video':
+                await bot.send_video(chat_id=user_id, video=media_file_id, caption=text, parse_mode="HTML")
+            elif media_type == 'animation':
+                await bot.send_animation(chat_id=user_id, animation=media_file_id, caption=text, parse_mode="HTML")
+            elif media_type == 'document':
+                await bot.send_document(chat_id=user_id, document=media_file_id, caption=text, parse_mode="HTML")
+            else:
+                await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+            
+            success += 1
+            await asyncio.sleep(0.05)
+            
+        except Exception as e:
+            failed += 1
+            print(f"❌ Ошибка отправки пользователю {user_id_str}: {e}")
+    
+    result_text = (
+        f"✅ **РАССЫЛКА ЗАВЕРШЕНА!**\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"✅ Успешно: {success}\n"
+        f"❌ Ошибок: {failed}\n"
+        f"👥 Всего: {len(users_stats)}\n\n"
+        f"📝 Текст: {text[:100]}{'...' if len(text) > 100 else ''}"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
+    ])
+    
+    await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode="Markdown")
+    await state.clear()
+    await callback.answer()
+
+@dp.callback_query(F.data == "cancel_mailing")
+async def cancel_mailing(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    await state.clear()
+    await callback.message.edit_text(
+        "❌ **Рассылка отменена!**",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
+        ]),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
 
 # ==================== ОСТАЛЬНЫЕ ФУНКЦИИ ====================
 
