@@ -1,12 +1,13 @@
 {
   "6621617827": {
     "first_seen": 1787678237.240752,
-    "last_seen": 1787679260.2321775,
+    "last_seen": 1788173945.7777257,
     "first_name": "SCRTYB",
     "username": "SCRTYB",
-    "total_visits": 3,
+    "total_visits": 4,
     "daily_visits": {
-      "2026-08-25": 3
+      "2026-08-25": 3,
+      "2026-08-31": 1
     },
     "total_commands": 0
   },
