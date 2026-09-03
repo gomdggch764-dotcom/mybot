@@ -96,5 +96,16 @@
       "2026-09-03": 3
     },
     "total_commands": 2
+  },
+  "8413525787": {
+    "first_seen": 1788460365.0394824,
+    "last_seen": 1788460365.0394824,
+    "first_name": "xazika",
+    "username": "Cttelo",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-03": 1
+    },
+    "total_commands": 0
   }
 }
