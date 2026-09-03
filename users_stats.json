@@ -107,5 +107,16 @@
       "2026-09-03": 3
     },
     "total_commands": 2
+  },
+  "8500179578": {
+    "first_seen": 1788463112.636773,
+    "last_seen": 1788463112.636773,
+    "first_name": "Тор",
+    "username": "",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-03": 1
+    },
+    "total_commands": 0
   }
 }
