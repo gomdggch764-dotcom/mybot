@@ -23,5 +23,10 @@
     "text": "чит на roblox",
     "media_type": "document",
     "media_file_id": "BQACAgEAAxkBAAICCGqZuh6KDzN3JzkqPBfOeONIgkAOAAJICAACbHHQRBqr6wL4td4ePQQ"
+  },
+  "DeadRails": {
+    "text": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/erewe23/deadrailsring.github.io/refs/heads/main/ringta.lua\"))()",
+    "media_type": null,
+    "media_file_id": null
   }
 }
