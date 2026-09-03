@@ -110,12 +110,12 @@
   },
   "8500179578": {
     "first_seen": 1788463112.636773,
-    "last_seen": 1788463123.876606,
+    "last_seen": 1788463217.245219,
     "first_name": "Тор",
     "username": "",
-    "total_visits": 2,
+    "total_visits": 3,
     "daily_visits": {
-      "2026-09-03": 2
+      "2026-09-03": 3
     },
     "total_commands": 2
   }
