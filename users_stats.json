@@ -60,5 +60,16 @@
       "2026-09-01": 1
     },
     "total_commands": 0
+  },
+  "7049911665": {
+    "first_seen": 1788420361.5292637,
+    "last_seen": 1788420361.5292637,
+    "first_name": "Я конченый",
+    "username": "Zubri67",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-03": 1
+    },
+    "total_commands": 0
   }
 }
