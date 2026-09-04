@@ -1338,7 +1338,7 @@ async def check_speed(callback: types.CallbackQuery):
         await callback.message.edit_text(
             speed_text,
             reply_markup=keyboard,
-            parse_mode="Markdown"
+            parse_mode=None
         )
         
     except Exception as e:
@@ -1349,7 +1349,7 @@ async def check_speed(callback: types.CallbackQuery):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
             ]),
-            parse_mode="Markdown"
+            parse_mode=None
         )
     
     await callback.answer()
@@ -1364,7 +1364,7 @@ async def copy_command_link(callback: types.CallbackQuery):
     await callback.message.answer(
         f"🔗 **Ссылка на команду `{command_name}`:**\n"
         f"`{link}`",
-        parse_mode="Markdown"
+        parse_mode=None
     )
 
 @dp.callback_query(F.data == "list_commands")
@@ -1440,7 +1440,7 @@ async def delete_command_menu(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "🗑 **Выберите команду для удаления:**",
             reply_markup=keyboard,
-            parse_mode="Markdown"
+            parse_mode=None
         )
     except Exception as e:
         if "message is not modified" not in str(e):
@@ -1499,7 +1499,7 @@ async def check_subscription_callback(callback: types.CallbackQuery):
                     "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
                     "━━━━━━━━━━━━━━━━━━"
                 )
-                await callback.message.edit_text(welcome_text, parse_mode="Markdown")
+                await callback.message.edit_text(welcome_text, parse_mode="None")
             except Exception as e:
                 if "message is not modified" not in str(e):
                     raise
