@@ -18,7 +18,6 @@ logging.basicConfig(level=logging.INFO)
 # ============ КОНФИГ ============
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8878696401:AAFmIgsiHE_ZcP3Z-AziB-P0w_63gIgnXUY")
 
-# 🔽 ТРИ КАНАЛА ДЛЯ ПОДПИСКИ 🔽
 REQUIRED_CHANNELS = [
     {
         "id": "@spookyscripts",
@@ -49,11 +48,9 @@ storage = MemoryStorage()
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=storage)
 
-# Файлы для хранения
 COMMANDS_FILE = "hidden_commands.json"
 USERS_FILE = "users_stats.json"
 
-# Статистика бота
 bot_stats = {
     "start_time": time.time(),
     "messages_processed": 0,
@@ -65,7 +62,6 @@ users_page = {}
 
 # ============ ФУНКЦИИ РАБОТЫ С GITHUB ============
 def save_to_github(file_path, content):
-    """Сохраняет файл в репозиторий GitHub"""
     if not GITHUB_TOKEN or not GITHUB_REPO:
         print("⚠️ GitHub не настроен, файл сохранен только локально")
         return False
@@ -105,7 +101,6 @@ def save_to_github(file_path, content):
         return False
 
 def load_from_github(file_path):
-    """Загружает файл из GitHub"""
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return None
     
@@ -183,7 +178,6 @@ class AddCommandStates(StatesGroup):
     waiting_for_text = State()
     waiting_for_media = State()
 
-# --- Состояния для рассылки ---
 class MailingStates(StatesGroup):
     waiting_for_mailing_text = State()
     waiting_for_mailing_media = State()
@@ -363,20 +357,24 @@ async def send_command_response(message: types.Message, command_data: dict):
     media_type = command_data.get('media_type')
     media_file_id = command_data.get('media_file_id')
     
-    if media_type == 'photo':
-        await message.answer_photo(photo=media_file_id, caption=text, parse_mode="HTML")
-    elif media_type == 'video':
-        await message.answer_video(video=media_file_id, caption=text, parse_mode="HTML")
-    elif media_type == 'document':
-        await message.answer_document(document=media_file_id, caption=text, parse_mode="HTML")
-    elif media_type == 'animation':
-        await message.answer_animation(animation=media_file_id, caption=text, parse_mode="HTML")
-    elif media_type == 'audio':
-        await message.answer_audio(audio=media_file_id, caption=text, parse_mode="HTML")
-    elif media_type == 'voice':
-        await message.answer_voice(voice=media_file_id, caption=text, parse_mode="HTML")
-    else:
-        await message.answer(text, parse_mode="HTML")
+    try:
+        if media_type == 'photo':
+            await message.answer_photo(photo=media_file_id, caption=text)
+        elif media_type == 'video':
+            await message.answer_video(video=media_file_id, caption=text)
+        elif media_type == 'document':
+            await message.answer_document(document=media_file_id, caption=text)
+        elif media_type == 'animation':
+            await message.answer_animation(animation=media_file_id, caption=text)
+        elif media_type == 'audio':
+            await message.answer_audio(audio=media_file_id, caption=text)
+        elif media_type == 'voice':
+            await message.answer_voice(voice=media_file_id, caption=text)
+        else:
+            await message.answer(text)
+    except Exception as e:
+        print(f"Ошибка отправки команды: {e}")
+        await message.answer(text)
 
 # ==================== ОБРАБОТЧИКИ ====================
 
@@ -432,18 +430,18 @@ async def cmd_start(message: types.Message):
     else:
         channels_text = ""
         for ch in REQUIRED_CHANNELS:
-            channels_text += f"• [{ch['name']}]({ch['link']})\n"
+            channels_text += f"• {ch['name']}\n"
         
         welcome_text = (
-            "🎮 **БОТ АКТИВИРОВАН**\n"
+            "🎮 БОТ АКТИВИРОВАН\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
             "✅ Вы успешно подписались на все каналы!\n\n"
-            "📢 **Активация скриптов происходит через:**\n"
+            "📢 Активация скриптов происходит через:\n"
             f"{channels_text}\n"
-            "⚡ **Бот работает 24/7 без задержки**\n\n"
+            "⚡ Бот работает 24/7 без задержки\n\n"
             "━━━━━━━━━━━━━━━━━━\n"
             "────────────────────\n"
-            "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
+            "🐛 В случае багов: @ViatrixTech\n"
             "━━━━━━━━━━━━━━━━━━"
         )
         
@@ -452,15 +450,13 @@ async def cmd_start(message: types.Message):
             if photo:
                 await message.answer_photo(
                     photo=photo,
-                    caption=welcome_text,
-                    parse_mode="Markdown"
+                    caption=welcome_text
                 )
             else:
-                await message.answer(welcome_text, parse_mode="Markdown")
+                await message.answer(welcome_text)
         except Exception as e:
-            await message.answer(welcome_text, parse_mode="Markdown")
+            await message.answer(welcome_text)
 
-# --- КОМАНДА /info ---
 @dp.message(Command("info"))
 async def cmd_info(message: types.Message):
     if not is_admin(message.from_user.id):
@@ -470,11 +466,10 @@ async def cmd_info(message: types.Message):
     args = message.text.split()
     if len(args) < 2:
         await message.answer(
-            "❌ **Использование:** `/info @username` или `/info 123456789`\n\n"
+            "❌ Использование: /info @username или /info 123456789\n\n"
             "Примеры:\n"
-            "• `/info @spookyscripts`\n"
-            "• `/info 6621617827`",
-            parse_mode="Markdown"
+            "• /info @spookyscripts\n"
+            "• /info 6621617827"
         )
         return
     
@@ -508,32 +503,28 @@ async def cmd_info(message: types.Message):
         time_str += f"{stats['hours']}ч "
     time_str += f"{stats['minutes']}м"
     
-    info_text = f"""
-👤 **Информация о пользователе**
-━━━━━━━━━━━━━━━━━━
-
-🆔 **ID:** `{stats['user_id']}`
-📛 **Имя:** {stats['first_name']}
-🔗 **Username:** {username_display}
-
-━━━━━━━━━━━━━━━━━━
-⏱ **Время в боте:** {time_str}
-📅 **Впервые:** {stats['first_seen']}
-🕐 **Последний раз:** {stats['last_seen']}
-
-━━━━━━━━━━━━━━━━━━
-📊 **Активность:**
-• Всего визитов: {stats['total_visits']}
-• Сегодня: {stats['today_visits']}
-• За неделю: {stats['week_visits']}
-• За месяц: {stats['month_visits']}
-• За год: {stats['year_visits']}
-• Команд активировано: {stats['total_commands']}
-    """
+    info_text = (
+        f"👤 ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"🆔 ID: {stats['user_id']}\n"
+        f"📛 Имя: {stats['first_name']}\n"
+        f"🔗 Username: {username_display}\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⏱ Время в боте: {time_str}\n"
+        f"📅 Впервые: {stats['first_seen']}\n"
+        f"🕐 Последний раз: {stats['last_seen']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📊 Активность:\n"
+        f"• Всего визитов: {stats['total_visits']}\n"
+        f"• Сегодня: {stats['today_visits']}\n"
+        f"• За неделю: {stats['week_visits']}\n"
+        f"• За месяц: {stats['month_visits']}\n"
+        f"• За год: {stats['year_visits']}\n"
+        f"• Команд активировано: {stats['total_commands']}"
+    )
     
-    await message.answer(info_text, parse_mode="Markdown")
+    await message.answer(info_text)
 
-# --- АДМИН-ПАНЕЛЬ ---
 @dp.callback_query(F.data == "admin_panel")
 async def admin_panel(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
@@ -556,24 +547,22 @@ async def admin_panel(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(
-            f"⚙️ **Админ-панель**\n\n"
-            f"👥 **Всего пользователей:** {total_users}\n"
-            f"🎯 **Всего команд активировано:** {total_commands_all}\n"
-            f"📁 **Скрытых команд:** {len(hidden_commands)}\n\n"
-            "📊 **Статистика всех пользователей** - список всех юзеров\n"
-            "👤 **Моя статистика** - ваша активность в боте\n"
-            "⚡ **Проверить скорость** - задержка бота\n"
-            "➕ **Добавить команду** - создайте скрытую команду\n"
-            "📨 **Сделать рассылку** - отправьте сообщение всем пользователям",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            f"⚙️ АДМИН-ПАНЕЛЬ\n\n"
+            f"👥 Всего пользователей: {total_users}\n"
+            f"🎯 Всего команд активировано: {total_commands_all}\n"
+            f"📁 Скрытых команд: {len(hidden_commands)}\n\n"
+            f"📊 Статистика всех пользователей - список всех юзеров\n"
+            f"👤 Моя статистика - ваша активность в боте\n"
+            f"⚡ Проверить скорость - задержка бота\n"
+            f"➕ Добавить команду - создайте скрытую команду\n"
+            f"📨 Сделать рассылку - отправьте сообщение всем пользователям",
+            reply_markup=keyboard
         )
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
     await callback.answer()
 
-# --- СТАТИСТИКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ С ПАГИНАЦИЕЙ ---
 @dp.callback_query(F.data == "all_users_stats")
 async def all_users_stats(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
@@ -603,12 +592,11 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
     
     if not all_stats:
         await message.edit_text(
-            "📭 **Нет пользователей**\n\n"
+            "📭 Нет пользователей\n\n"
             "Пока никто не использовал бота.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
-            ]),
-            parse_mode="Markdown"
+            ])
         )
         return
     
@@ -624,7 +612,7 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
     end_idx = min(start_idx + per_page, len(all_stats))
     page_stats = all_stats[start_idx:end_idx]
     
-    text = f"📊 **Статистика всех пользователей**\n"
+    text = f"📊 СТАТИСТИКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ\n"
     text += f"👥 Всего: {len(all_stats)} | 📄 Страница {page + 1}/{total_pages}\n"
     text += "━━━━━━━━━━━━━━━━━━\n\n"
     
@@ -637,8 +625,8 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
             time_str += f"{stats['hours']}ч "
         time_str += f"{stats['minutes']}м"
         
-        text += f"{i}. **{stats['first_name']}**\n"
-        text += f"   🆔 `{stats['user_id']}`\n"
+        text += f"{i}. {stats['first_name']}\n"
+        text += f"   🆔 {stats['user_id']}\n"
         text += f"   🔗 {username_display}\n"
         text += f"   👁 Визитов: {stats['total_visits']} | ⏱ {time_str}\n"
         text += f"   📅 Первый визит: {stats['first_seen']}\n\n"
@@ -662,14 +650,12 @@ async def show_users_page(message: types.Message, user_id: int, page: int):
     try:
         await message.edit_text(
             text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
 
-# --- СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ ---
 @dp.callback_query(F.data == "my_stats")
 async def my_stats(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
@@ -692,28 +678,25 @@ async def my_stats(callback: types.CallbackQuery):
         time_str += f"{stats['hours']}ч "
     time_str += f"{stats['minutes']}м"
     
-    stats_text = f"""
-👤 **Моя статистика**
-━━━━━━━━━━━━━━━━━━
-
-📛 **Имя:** {stats['first_name']}
-🔗 **Username:** {username_display}
-🆔 **ID:** `{stats['user_id']}`
-
-━━━━━━━━━━━━━━━━━━
-⏱ **Время в боте:** {time_str}
-📅 **Впервые:** {stats['first_seen']}
-🕐 **Последний раз:** {stats['last_seen']}
-
-━━━━━━━━━━━━━━━━━━
-📊 **Активность:**
-• Всего визитов: {stats['total_visits']}
-• Сегодня: {stats['today_visits']}
-• За неделю: {stats['week_visits']}
-• За месяц: {stats['month_visits']}
-• За год: {stats['year_visits']}
-• Команд активировано: {stats['total_commands']}
-    """
+    stats_text = (
+        f"👤 МОЯ СТАТИСТИКА\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📛 Имя: {stats['first_name']}\n"
+        f"🔗 Username: {username_display}\n"
+        f"🆔 ID: {stats['user_id']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⏱ Время в боте: {time_str}\n"
+        f"📅 Впервые: {stats['first_seen']}\n"
+        f"🕐 Последний раз: {stats['last_seen']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📊 Активность:\n"
+        f"• Всего визитов: {stats['total_visits']}\n"
+        f"• Сегодня: {stats['today_visits']}\n"
+        f"• За неделю: {stats['week_visits']}\n"
+        f"• За месяц: {stats['month_visits']}\n"
+        f"• За год: {stats['year_visits']}\n"
+        f"• Команд активировано: {stats['total_commands']}"
+    )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Обновить", callback_data="my_stats")],
@@ -723,15 +706,12 @@ async def my_stats(callback: types.CallbackQuery):
     try:
         await callback.message.edit_text(
             stats_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
     await callback.answer()
-
-# ==================== ДОБАВЛЕНИЕ КОМАНДЫ ====================
 
 @dp.callback_query(F.data == "add_command")
 async def add_command_start(callback: types.CallbackQuery, state: FSMContext):
@@ -741,12 +721,11 @@ async def add_command_start(callback: types.CallbackQuery, state: FSMContext):
     
     try:
         await callback.message.edit_text(
-            "📝 **Шаг 1 из 2: Название команды**\n\n"
-            "Введите **название команды** (латиницей, без пробелов):\n"
-            "Пример: `special_offer`\n\n"
+            "📝 Шаг 1 из 2: Название команды\n\n"
+            "Введите название команды (латиницей, без пробелов):\n"
+            "Пример: special_offer\n\n"
             "⚠️ Команда будет скрыта и доступна только по ссылке.\n\n"
-            "❌ Для отмены отправьте /cancel",
-            parse_mode="Markdown"
+            "❌ Для отмены отправьте /cancel"
         )
     except Exception as e:
         if "message is not modified" not in str(e):
@@ -775,23 +754,18 @@ async def add_command_get_name(message: types.Message, state: FSMContext):
     await state.set_state(AddCommandStates.waiting_for_media)
     
     await message.answer(
-        f"✅ Имя команды: `{command_name}`\n\n"
-        "📝 **Шаг 2 из 2: Отправьте контент**\n\n"
+        f"✅ Имя команды: {command_name}\n\n"
+        "📝 Шаг 2 из 2: Отправьте контент\n\n"
         "Теперь просто отправьте:\n"
-        "• 📝 **Текст** (с HTML-разметкой)\n"
-        "• 📷 **Фото**\n"
-        "• 🎬 **Видео**\n"
-        "• 📄 **Файл** (документ)\n"
-        "• 🎥 **GIF-анимацию**\n"
-        "• 🎵 **Аудио**\n"
-        "• 🎤 **Голосовое сообщение**\n\n"
-        "⚠️ Если отправите медиа без текста - команда сохранится с пустым текстом.\n"
-        "⚠️ Если отправите текст - команда сохранится без медиа.\n\n"
-        "❌ Отмена: /cancel",
-        parse_mode="Markdown"
+        "• 📝 Текст\n"
+        "• 📷 Фото\n"
+        "• 🎬 Видео\n"
+        "• 📄 Файл (документ)\n"
+        "• 🎥 GIF-анимацию\n"
+        "• 🎵 Аудио\n"
+        "• 🎤 Голосовое сообщение\n\n"
+        "❌ Отмена: /cancel"
     )
-
-# --- АВТОМАТИЧЕСКОЕ ОПРЕДЕЛЕНИЕ ТИПА ---
 
 @dp.message(StateFilter(AddCommandStates.waiting_for_media), F.text)
 async def get_command_text(message: types.Message, state: FSMContext):
@@ -802,22 +776,14 @@ async def get_command_text(message: types.Message, state: FSMContext):
     command_name = data.get('command_name')
     text = message.text
     
-    existing_media = data.get('media_type')
-    
-    if existing_media:
-        hidden_commands[command_name]['text'] = text
-        save_commands(hidden_commands)
-        await show_command_created(message, command_name, text, hidden_commands[command_name])
-        await state.clear()
-    else:
-        hidden_commands[command_name] = {
-            "text": text,
-            "media_type": None,
-            "media_file_id": None
-        }
-        save_commands(hidden_commands)
-        await show_command_created(message, command_name, text, hidden_commands[command_name])
-        await state.clear()
+    hidden_commands[command_name] = {
+        "text": text,
+        "media_type": None,
+        "media_file_id": None
+    }
+    save_commands(hidden_commands)
+    await show_command_created(message, command_name, text, hidden_commands[command_name])
+    await state.clear()
 
 @dp.message(StateFilter(AddCommandStates.waiting_for_media), F.photo)
 async def get_command_photo(message: types.Message, state: FSMContext):
@@ -827,7 +793,6 @@ async def get_command_photo(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     photo = message.photo[-1]
     
     hidden_commands[command_name] = {
@@ -847,7 +812,6 @@ async def get_command_video(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     video = message.video
     
     hidden_commands[command_name] = {
@@ -867,7 +831,6 @@ async def get_command_document(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     document = message.document
     
     hidden_commands[command_name] = {
@@ -887,7 +850,6 @@ async def get_command_gif(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     animation = message.animation
     
     hidden_commands[command_name] = {
@@ -907,7 +869,6 @@ async def get_command_audio(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     audio = message.audio
     
     hidden_commands[command_name] = {
@@ -927,7 +888,6 @@ async def get_command_voice(message: types.Message, state: FSMContext):
     data = await state.get_data()
     command_name = data.get('command_name')
     text = message.caption or ""
-    
     voice = message.voice
     
     hidden_commands[command_name] = {
@@ -939,7 +899,6 @@ async def get_command_voice(message: types.Message, state: FSMContext):
     await show_command_created(message, command_name, text, hidden_commands[command_name])
     await state.clear()
 
-# --- ФУНКЦИЯ ПОКАЗА ГОТОВОЙ КОМАНДЫ ---
 async def show_command_created(message: types.Message, command_name: str, text: str, command_data: dict):
     bot_username = (await bot.get_me()).username
     bot_link = f"https://t.me/{bot_username}?start={command_name}"
@@ -972,12 +931,12 @@ async def show_command_created(message: types.Message, command_name: str, text: 
     ])
     
     result_text = (
-        f"✅ **Команда создана!**\n\n"
-        f"📌 Имя: `{command_name}`\n"
+        f"✅ Команда создана!\n\n"
+        f"📌 Имя: {command_name}\n"
         f"📝 Текст: {text[:100] if text else '❌ нет'}\n"
         f"📎 Медиа: {media_emoji} {media_name}\n\n"
-        f"🔗 **Ссылка для кнопки:**\n"
-        f"`{bot_link}`\n\n"
+        f"🔗 Ссылка для кнопки:\n"
+        f"{bot_link}\n\n"
         f"⚠️ Эту команду нельзя вызвать через /start - только по ссылке!"
     )
     
@@ -985,21 +944,19 @@ async def show_command_created(message: types.Message, command_name: str, text: 
     media_file_id = command_data.get('media_file_id')
     
     if media_type == 'photo':
-        await message.answer_photo(photo=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_photo(photo=media_file_id, caption=result_text, reply_markup=keyboard)
     elif media_type == 'video':
-        await message.answer_video(video=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_video(video=media_file_id, caption=result_text, reply_markup=keyboard)
     elif media_type == 'document':
-        await message.answer_document(document=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_document(document=media_file_id, caption=result_text, reply_markup=keyboard)
     elif media_type == 'animation':
-        await message.answer_animation(animation=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_animation(animation=media_file_id, caption=result_text, reply_markup=keyboard)
     elif media_type == 'audio':
-        await message.answer_audio(audio=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_audio(audio=media_file_id, caption=result_text, reply_markup=keyboard)
     elif media_type == 'voice':
-        await message.answer_voice(voice=media_file_id, caption=result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_voice(voice=media_file_id, caption=result_text, reply_markup=keyboard)
     else:
-        await message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
-
-# ==================== РАССЫЛКА ====================
+        await message.answer(result_text, reply_markup=keyboard)
 
 @dp.callback_query(F.data == "start_mailing")
 async def start_mailing(callback: types.CallbackQuery, state: FSMContext):
@@ -1008,15 +965,10 @@ async def start_mailing(callback: types.CallbackQuery, state: FSMContext):
         return
     
     await callback.message.edit_text(
-        "📨 **СОЗДАНИЕ РАССЫЛКИ**\n"
+        "📨 СОЗДАНИЕ РАССЫЛКИ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
-        "Отправьте **текст** сообщения для рассылки.\n\n"
-        "📝 Можно использовать HTML-разметку:\n"
-        "• `<b>жирный</b>`\n"
-        "• `<i>курсив</i>`\n"
-        "• `<a href='url'>ссылка</a>`\n\n"
-        "❌ Для отмены отправьте /cancel",
-        parse_mode="Markdown"
+        "Отправьте текст сообщения для рассылки.\n\n"
+        "❌ Для отмены отправьте /cancel"
     )
     await state.set_state(MailingStates.waiting_for_mailing_text)
     await callback.answer()
@@ -1035,13 +987,12 @@ async def get_mailing_text(message: types.Message, state: FSMContext):
     await state.set_state(MailingStates.waiting_for_mailing_media)
     
     await message.answer(
-        "✅ **Текст сохранен!**\n\n"
-        "📎 Теперь отправьте **медиа** (фото, видео, GIF) или нажмите **Пропустить** если хотите отправить только текст.\n\n"
+        "✅ Текст сохранен!\n\n"
+        "📎 Теперь отправьте медиа (фото, видео, GIF) или нажмите Пропустить если хотите отправить только текст.\n\n"
         "➡️ Нажмите кнопку ниже чтобы пропустить медиа:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⏭️ Пропустить медиа", callback_data="skip_media")]
-        ]),
-        parse_mode="Markdown"
+        ])
     )
 
 @dp.callback_query(F.data == "skip_media")
@@ -1054,14 +1005,11 @@ async def skip_media(callback: types.CallbackQuery, state: FSMContext):
     await show_confirm_mailing(callback.message, state)
     await callback.answer()
 
-# --- ИСПРАВЛЕННЫЕ ОБРАБОТЧИКИ МЕДИА (сохраняют caption как текст) ---
-
 @dp.message(StateFilter(MailingStates.waiting_for_mailing_media), F.photo)
 async def get_mailing_photo(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     
-    # Если есть подпись, сохраняем её как текст
     caption = message.caption or ""
     if caption:
         await state.update_data(mailing_text=caption)
@@ -1117,8 +1065,6 @@ async def get_mailing_document(message: types.Message, state: FSMContext):
     print(f"✅ Сохранён документ: {document.file_id}")
     await show_confirm_mailing(message, state)
 
-# -------------------------------------------------------
-
 async def show_confirm_mailing(message: types.Message, state: FSMContext):
     data = await state.get_data()
     text = data.get('mailing_text', '')
@@ -1128,12 +1074,12 @@ async def show_confirm_mailing(message: types.Message, state: FSMContext):
     total_users = len(users_stats)
     
     confirm_text = (
-        f"📨 **ПОДТВЕРЖДЕНИЕ РАССЫЛКИ**\n"
+        f"📨 ПОДТВЕРЖДЕНИЕ РАССЫЛКИ\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"👥 **Получателей:** {total_users} пользователей\n"
-        f"📝 **Текст:**\n{text[:200]}{'...' if len(text) > 200 else ''}\n\n"
-        f"📎 **Медиа:** {'✅ есть' if media_type else '❌ нет'}\n\n"
-        f"⚠️ Рассылка будет отправлена **ВСЕМ** пользователям!\n"
+        f"👥 Получателей: {total_users} пользователей\n"
+        f"📝 Текст:\n{text[:200]}{'...' if len(text) > 200 else ''}\n\n"
+        f"📎 Медиа: {'✅ есть' if media_type else '❌ нет'}\n\n"
+        f"⚠️ Рассылка будет отправлена ВСЕМ пользователям!\n"
         f"Отменить будет невозможно!"
     )
     
@@ -1143,15 +1089,15 @@ async def show_confirm_mailing(message: types.Message, state: FSMContext):
     ])
     
     if media_type == 'photo':
-        await message.answer_photo(photo=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_photo(photo=media_file_id, caption=confirm_text, reply_markup=keyboard)
     elif media_type == 'video':
-        await message.answer_video(video=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_video(video=media_file_id, caption=confirm_text, reply_markup=keyboard)
     elif media_type == 'animation':
-        await message.answer_animation(animation=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_animation(animation=media_file_id, caption=confirm_text, reply_markup=keyboard)
     elif media_type == 'document':
-        await message.answer_document(document=media_file_id, caption=confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer_document(document=media_file_id, caption=confirm_text, reply_markup=keyboard)
     else:
-        await message.answer(confirm_text, reply_markup=keyboard, parse_mode="Markdown")
+        await message.answer(confirm_text, reply_markup=keyboard)
     
     await state.set_state(MailingStates.waiting_for_mailing_confirm)
 
@@ -1166,21 +1112,17 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
     media_type = data.get('media_type')
     media_file_id = data.get('media_file_id')
     
-    # Логируем данные для отладки
     print(f"📨 Отправка рассылки: текст='{text[:50]}', тип={media_type}, file_id={media_file_id}")
     
-    # Пытаемся отредактировать сообщение, если не получается – отвечаем новым
     try:
         await callback.message.edit_text(
-            "⏳ **Отправка рассылки...**\n"
-            f"👥 Получателей: {len(users_stats)}",
-            parse_mode="Markdown"
+            f"⏳ Отправка рассылки...\n"
+            f"👥 Получателей: {len(users_stats)}"
         )
     except Exception as e:
         await callback.message.answer(
-            "⏳ **Отправка рассылки...**\n"
-            f"👥 Получателей: {len(users_stats)}",
-            parse_mode="Markdown"
+            f"⏳ Отправка рассылки...\n"
+            f"👥 Получателей: {len(users_stats)}"
         )
     
     success = 0
@@ -1190,52 +1132,45 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
         try:
             user_id = int(user_id_str)
             
-            # Отправляем медиа, если есть, иначе только текст
             if media_type and media_file_id:
                 if media_type == 'photo':
                     await bot.send_photo(
                         chat_id=user_id,
                         photo=media_file_id,
-                        caption=text if text else None,
-                        parse_mode="HTML"
+                        caption=text if text else None
                     )
                 elif media_type == 'video':
                     await bot.send_video(
                         chat_id=user_id,
                         video=media_file_id,
-                        caption=text if text else None,
-                        parse_mode="HTML"
+                        caption=text if text else None
                     )
                 elif media_type == 'animation':
                     await bot.send_animation(
                         chat_id=user_id,
                         animation=media_file_id,
-                        caption=text if text else None,
-                        parse_mode="HTML"
+                        caption=text if text else None
                     )
                 elif media_type == 'document':
                     await bot.send_document(
                         chat_id=user_id,
                         document=media_file_id,
-                        caption=text if text else None,
-                        parse_mode="HTML"
+                        caption=text if text else None
                     )
                 else:
-                    # На случай неизвестного типа – просто текст
-                    await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+                    await bot.send_message(chat_id=user_id, text=text)
             else:
-                # Только текст
-                await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+                await bot.send_message(chat_id=user_id, text=text)
             
             success += 1
-            await asyncio.sleep(0.05)  # небольшая задержка
+            await asyncio.sleep(0.05)
             
         except Exception as e:
             failed += 1
             print(f"❌ Ошибка отправки пользователю {user_id_str}: {e}")
     
     result_text = (
-        f"✅ **РАССЫЛКА ЗАВЕРШЕНА!**\n"
+        f"✅ РАССЫЛКА ЗАВЕРШЕНА!\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"✅ Успешно: {success}\n"
         f"❌ Ошибок: {failed}\n"
@@ -1248,9 +1183,9 @@ async def confirm_mailing(callback: types.CallbackQuery, state: FSMContext):
     ])
     
     try:
-        await callback.message.edit_text(result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await callback.message.edit_text(result_text, reply_markup=keyboard)
     except Exception as e:
-        await callback.message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
+        await callback.message.answer(result_text, reply_markup=keyboard)
     
     await state.clear()
     await callback.answer()
@@ -1263,15 +1198,12 @@ async def cancel_mailing(callback: types.CallbackQuery, state: FSMContext):
     
     await state.clear()
     await callback.message.edit_text(
-        "❌ **Рассылка отменена!**",
+        "❌ Рассылка отменена!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
-        ]),
-        parse_mode="Markdown"
+        ])
     )
     await callback.answer()
-
-# ==================== ОСТАЛЬНЫЕ ФУНКЦИИ ====================
 
 @dp.callback_query(F.data == "check_speed")
 async def check_speed(callback: types.CallbackQuery):
@@ -1281,9 +1213,8 @@ async def check_speed(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(
-            "⏳ **Измерение скорости бота...**\n"
-            "Выполняется 3 замера...",
-            parse_mode="Markdown"
+            "⏳ Измерение скорости бота...\n"
+            "Выполняется 3 замера..."
         )
     except Exception as e:
         if "message is not modified" not in str(e):
@@ -1309,26 +1240,22 @@ async def check_speed(callback: types.CallbackQuery):
             speed_emoji = "❌"
             speed_status = "Ошибка замера"
         
-        speed_text = f"""
-{speed_emoji} **⚡ СКОРОСТЬ БОТА**
-━━━━━━━━━━━━━━━━━━
-
-📡 **Задержка (пинг):**
-• Средняя: {stats['avg_ping']} мс
-• Минимальная: {stats['min_ping']} мс  
-• Максимальная: {stats['max_ping']} мс
-
-📊 **Статус:** {speed_status}
-
-━━━━━━━━━━━━━━━━━━
-⏱ **Время работы:** {stats['uptime']}
-📨 **Сообщений:** {stats['messages']}
-🎯 **Команд активировано:** {stats['commands']}
-📁 **Скрытых команд:** {stats['hidden_commands']}
-⚠️ **Ошибок:** {stats['errors']}
-
-🕐 Проверено: {stats['last_check']}
-        """
+        speed_text = (
+            f"{speed_emoji} ⚡ СКОРОСТЬ БОТА\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📡 Задержка (пинг):\n"
+            f"• Средняя: {stats['avg_ping']} мс\n"
+            f"• Минимальная: {stats['min_ping']} мс\n"
+            f"• Максимальная: {stats['max_ping']} мс\n\n"
+            f"📊 Статус: {speed_status}\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ Время работы: {stats['uptime']}\n"
+            f"📨 Сообщений: {stats['messages']}\n"
+            f"🎯 Команд активировано: {stats['commands']}\n"
+            f"📁 Скрытых команд: {stats['hidden_commands']}\n"
+            f"⚠️ Ошибок: {stats['errors']}\n\n"
+            f"🕐 Проверено: {stats['last_check']}"
+        )
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Обновить", callback_data="check_speed")],
@@ -1337,19 +1264,17 @@ async def check_speed(callback: types.CallbackQuery):
         
         await callback.message.edit_text(
             speed_text,
-            reply_markup=keyboard,
-            parse_mode=None
+            reply_markup=keyboard
         )
         
     except Exception as e:
         bot_stats["errors"] += 1
         await callback.message.edit_text(
-            f"❌ **Ошибка при проверке скорости:**\n```\n{str(e)}\n```\n\n"
+            f"❌ Ошибка при проверке скорости:\n{str(e)}\n\n"
             "Попробуйте позже.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
-            ]),
-            parse_mode=None
+            ])
         )
     
     await callback.answer()
@@ -1362,9 +1287,8 @@ async def copy_command_link(callback: types.CallbackQuery):
     
     await callback.answer(f"🔗 Ссылка скопирована!", show_alert=True)
     await callback.message.answer(
-        f"🔗 **Ссылка на команду `{command_name}`:**\n"
-        f"`{link}`",
-        parse_mode=None
+        f"🔗 Ссылка на команду {command_name}:\n"
+        f"{link}"
     )
 
 @dp.callback_query(F.data == "list_commands")
@@ -1376,12 +1300,11 @@ async def list_commands(callback: types.CallbackQuery):
     if not hidden_commands:
         try:
             await callback.message.edit_text(
-                "📭 **Список команд пуст**\n\n"
+                "📭 Список команд пуст\n\n"
                 "Добавьте первую команду через админ-панель.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
-                ]),
-                parse_mode="Markdown"
+                ])
             )
         except Exception as e:
             if "message is not modified" not in str(e):
@@ -1389,7 +1312,7 @@ async def list_commands(callback: types.CallbackQuery):
         await callback.answer()
         return
     
-    text = "📋 **Список скрытых команд:**\n\n"
+    text = "📋 Список скрытых команд:\n\n"
     for idx, (name, data) in enumerate(hidden_commands.items(), 1):
         media_emoji = "📝"
         if data.get('media_type') == 'photo':
@@ -1405,7 +1328,7 @@ async def list_commands(callback: types.CallbackQuery):
         elif data.get('media_type') == 'voice':
             media_emoji = "🎤"
         
-        text += f"{idx}. {media_emoji} `{name}`\n"
+        text += f"{idx}. {media_emoji} {name}\n"
         text += f"   {data.get('text', '')[:50] if data.get('text') else '❌ без текста'}...\n\n"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1413,7 +1336,7 @@ async def list_commands(callback: types.CallbackQuery):
     ])
     
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        await callback.message.edit_text(text, reply_markup=keyboard)
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
@@ -1438,9 +1361,8 @@ async def delete_command_menu(callback: types.CallbackQuery):
     
     try:
         await callback.message.edit_text(
-            "🗑 **Выберите команду для удаления:**",
-            reply_markup=keyboard,
-            parse_mode=None
+            "🗑 Выберите команду для удаления:",
+            reply_markup=keyboard
         )
     except Exception as e:
         if "message is not modified" not in str(e):
@@ -1485,21 +1407,21 @@ async def check_subscription_callback(callback: types.CallbackQuery):
             try:
                 channels_text = ""
                 for ch in REQUIRED_CHANNELS:
-                    channels_text += f"• [{ch['name']}]({ch['link']})\n"
+                    channels_text += f"• {ch['name']}\n"
                 
                 welcome_text = (
-                    "🎮 **БОТ АКТИВИРОВАН**\n"
+                    "🎮 БОТ АКТИВИРОВАН\n"
                     "━━━━━━━━━━━━━━━━━━\n\n"
                     "✅ Вы успешно подписались на все каналы!\n\n"
-                    "📢 **Активация скриптов происходит через:**\n"
+                    "📢 Активация скриптов происходит через:\n"
                     f"{channels_text}\n"
-                    "⚡ **Бот работает 24/7 без задержки**\n\n"
+                    "⚡ Бот работает 24/7 без задержки\n\n"
                     "━━━━━━━━━━━━━━━━━━\n"
                     "────────────────────\n"
-                    "🐛 **В случае багов:** [ViatrixTech](https://t.me/ViatrixTech)\n"
+                    "🐛 В случае багов: @ViatrixTech\n"
                     "━━━━━━━━━━━━━━━━━━"
                 )
-                await callback.message.edit_text(welcome_text, parse_mode="None")
+                await callback.message.edit_text(welcome_text)
             except Exception as e:
                 if "message is not modified" not in str(e):
                     raise
@@ -1520,7 +1442,6 @@ async def back_to_start(callback: types.CallbackQuery):
     await cmd_start(callback.message)
     await callback.answer()
 
-# --- ЗАПУСК ---
 async def main():
     me = await bot.get_me()
     print(f"🤖 Бот запущен! Username: @{me.username}")
