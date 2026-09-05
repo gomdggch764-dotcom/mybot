@@ -132,5 +132,16 @@
       "2026-09-04": 4
     },
     "total_commands": 3
+  },
+  "8741926614": {
+    "first_seen": 1788600135.063582,
+    "last_seen": 1788600135.063582,
+    "first_name": "Олжас",
+    "username": "",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-05": 1
+    },
+    "total_commands": 0
   }
 }
