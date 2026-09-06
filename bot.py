@@ -16,7 +16,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 logging.basicConfig(level=logging.INFO)
 
 # ============ КОНФИГ ============
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8878696401:AAFmIgsiHE_ZcP3Z-AziB-P0w_63gIgnXUY")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8878696401:AAGWYU0a0xAbK1-BjDof9Y86_O4kDH5g-5s")
 
 REQUIRED_CHANNELS = [
     {
