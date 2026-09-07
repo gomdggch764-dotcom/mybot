@@ -169,5 +169,16 @@
       "2026-09-06": 2
     },
     "total_commands": 1
+  },
+  "8766338207": {
+    "first_seen": 1788792815.5099452,
+    "last_seen": 1788792815.5099452,
+    "first_name": "Timur",
+    "username": "",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-07": 1
+    },
+    "total_commands": 0
   }
 }
