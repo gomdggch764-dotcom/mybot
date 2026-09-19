@@ -205,5 +205,16 @@
       "2026-09-11": 1
     },
     "total_commands": 1
+  },
+  "8983311492": {
+    "first_seen": 1789776726.3687592,
+    "last_seen": 1789776726.3687592,
+    "first_name": "SST",
+    "username": "KAZAn_wweris",
+    "total_visits": 1,
+    "daily_visits": {
+      "2026-09-19": 1
+    },
+    "total_commands": 0
   }
 }
