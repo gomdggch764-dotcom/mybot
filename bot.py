@@ -50,6 +50,7 @@ dp = Dispatcher(storage=storage)
 
 COMMANDS_FILE = "hidden_commands.json"
 USERS_FILE = "users_stats.json"
+SETTINGS_FILE = "settings.json"
 
 bot_stats = {
     "start_time": time.time(),
@@ -168,9 +169,29 @@ def save_users_stats(stats):
     content = json.dumps(stats, ensure_ascii=False, indent=2)
     save_to_github(USERS_FILE, content)
 
+def load_settings():
+    github_data = load_from_github(SETTINGS_FILE)
+    if github_data is not None:
+        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(github_data, f, ensure_ascii=False, indent=2)
+        return github_data
+
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {"notify_clicks": True}
+
+def save_settings(settings):
+    with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+    
+    content = json.dumps(settings, ensure_ascii=False, indent=2)
+    save_to_github(SETTINGS_FILE, content)
+
 # Загружаем данные
 hidden_commands = load_commands()
 users_stats = load_users_stats()
+bot_settings = load_settings()
 
 # --- Состояния FSM ---
 class AddCommandStates(StatesGroup):
@@ -399,6 +420,22 @@ async def cmd_start(message: types.Message):
                 users_stats[str(user_id)]["total_commands"] += 1
                 save_users_stats(users_stats)
             
+            # === НОВОЕ: УВЕДОМЛЕНИЕ О ПЕРЕХОДЕ ===
+            if bot_settings.get("notify_clicks"):
+                username = f"@{message.from_user.username}" if message.from_user.username else "нет"
+                notify_text = (
+                    f"🔗 **Переход по ссылке!**\n\n"
+                    f"📁 Команда: `{command_name}`\n"
+                    f"👤 Юзер: {message.from_user.first_name} ({username})\n"
+                    f"🆔 ID: `{user_id}`"
+                )
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await bot.send_message(admin_id, notify_text, parse_mode="Markdown")
+                    except Exception:
+                        pass
+            # =====================================
+
             if not await is_user_subscribed(user_id):
                 keyboard = get_subscription_keyboard()
                 await message.answer(
@@ -542,6 +579,7 @@ async def admin_panel(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="📋 Список команд", callback_data="list_commands")],
         [InlineKeyboardButton(text="❌ Удалить команду", callback_data="delete_command")],
         [InlineKeyboardButton(text="📨 Сделать рассылку", callback_data="start_mailing")],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_start")]
     ])
     
@@ -555,13 +593,49 @@ async def admin_panel(callback: types.CallbackQuery):
             f"👤 Моя статистика - ваша активность в боте\n"
             f"⚡ Проверить скорость - задержка бота\n"
             f"➕ Добавить команду - создайте скрытую команду\n"
-            f"📨 Сделать рассылку - отправьте сообщение всем пользователям",
+            f"📨 Сделать рассылку - отправьте сообщение всем пользователям\n"
+            f"⚙️ Настройки - уведомления и прочее",
             reply_markup=keyboard
         )
     except Exception as e:
         if "message is not modified" not in str(e):
             raise
     await callback.answer()
+
+@dp.callback_query(F.data == "admin_settings")
+async def admin_settings(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    status = "✅ ВКЛ" if bot_settings.get("notify_clicks") else "❌ ВЫКЛ"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"Уведомления о кликах: {status}", callback_data="toggle_clicks")],
+        [InlineKeyboardButton(text="🔙 В админ-панель", callback_data="admin_panel")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            "⚙️ НАСТРОЙКИ БОТА\n\n"
+            "Здесь вы можете включить или выключить уведомления о переходах по скрытым ссылкам.",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        if "message is not modified" not in str(e):
+            raise
+    await callback.answer()
+
+@dp.callback_query(F.data == "toggle_clicks")
+async def toggle_clicks(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещен!", show_alert=True)
+        return
+    
+    bot_settings["notify_clicks"] = not bot_settings.get("notify_clicks", True)
+    save_settings(bot_settings)
+    
+    await admin_settings(callback)
+    await callback.answer("Настройка изменена!")
 
 @dp.callback_query(F.data == "all_users_stats")
 async def all_users_stats(callback: types.CallbackQuery):
@@ -764,6 +838,7 @@ async def add_command_get_name(message: types.Message, state: FSMContext):
         "• 🎥 GIF-анимацию\n"
         "• 🎵 Аудио\n"
         "• 🎤 Голосовое сообщение\n\n"
+        "💡 **Фишка:** Вы можете просто *переслать* сообщение с файлом боту, и он мгновенно возьмет его без скачивания!\n\n"
         "❌ Отмена: /cancel"
     )
 
@@ -898,6 +973,48 @@ async def get_command_voice(message: types.Message, state: FSMContext):
     save_commands(hidden_commands)
     await show_command_created(message, command_name, text, hidden_commands[command_name])
     await state.clear()
+
+# === НОВЫЙ ХЕНДЛЕР ДЛЯ ПЕРЕСЛАННЫХ СООБЩЕНИЙ ===
+@dp.message(StateFilter(AddCommandStates.waiting_for_media), F.forward_origin)
+async def get_command_forwarded(message: types.Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    
+    data = await state.get_data()
+    command_name = data.get('command_name')
+    text = message.caption or ""
+    
+    if message.document:
+        media_type = 'document'
+        file_id = message.document.file_id
+    elif message.video:
+        media_type = 'video'
+        file_id = message.video.file_id
+    elif message.photo:
+        media_type = 'photo'
+        file_id = message.photo[-1].file_id
+    elif message.animation:
+        media_type = 'animation'
+        file_id = message.animation.file_id
+    elif message.audio:
+        media_type = 'audio'
+        file_id = message.audio.file_id
+    elif message.voice:
+        media_type = 'voice'
+        file_id = message.voice.file_id
+    else:
+        await message.answer("❌ Поддерживаются только пересылка файлов, видео, фото, гиф, аудио или голосовых.")
+        return
+
+    hidden_commands[command_name] = {
+        "text": text,
+        "media_type": media_type,
+        "media_file_id": file_id
+    }
+    save_commands(hidden_commands)
+    await show_command_created(message, command_name, text, hidden_commands[command_name])
+    await state.clear()
+# ================================================
 
 async def show_command_created(message: types.Message, command_name: str, text: str, command_data: dict):
     bot_username = (await bot.get_me()).username
